@@ -1,0 +1,8 @@
+source ~/.bashrc
+
+# NOTE: Remember to deactivate conda first
+
+# Basically source everything
+source ./.venv/bin/activate # virtual env python
+source /opt/ros/humble/setup.bash # Original ros env
+source ~/interbotix_ws/install/setup.bash # the interbotix robot ws

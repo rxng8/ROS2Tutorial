@@ -48,3 +48,19 @@ def main(args=None):
 if __name__ == '__main__':
     main()
 ```
+
+## Installation
+
+```bash
+
+# Setup python environment
+bash setup-venv.sh
+
+# Source the environment to run python scripts
+source .all
+
+# Source the environment to run ros2 commands
+source .ros
+
+```
+
