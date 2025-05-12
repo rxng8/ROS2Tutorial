@@ -4,3 +4,4 @@ pip install rich opencv-python opencv-python-headless colored zmq transforms3d m
 pip install pygame
 pip install openai
 pip install python-dotenv
+pip install pyyaml lark

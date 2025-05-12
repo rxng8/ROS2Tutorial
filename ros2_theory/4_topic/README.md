@@ -4,7 +4,7 @@ This tutorial explains the concept of topics in ROS2 and how they facilitate com
 
 ## Prerequisites
 - ROS2 installed (see [Installation Guide](../1_installation/))
-- Basic understanding of ROS2 nodes (see [ROS2 Nodes in Python](../4_ros2_node_python/))
+- Basic understanding of ROS2 nodes (see [ROS2 Nodes in Python](../3_ros2_node_python/))
 
 ## What are Topics?
 
@@ -129,4 +129,4 @@ ros2 topic pub --qos-reliability reliable --qos-durability transient_local /topi
 While not covered in this tutorial, ROS2 allows creating custom message types in your packages. These define the data structure for your specific application needs.
 
 ## Next Steps
-Move on to implementing a [Publisher](../6_publisher/) to send messages on topics.
+Move on to implementing a [Publisher](../5_publisher/) to send messages on topics.

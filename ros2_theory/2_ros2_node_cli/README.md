@@ -51,18 +51,6 @@ Output should include:
 ros2 node info /turtlesim
 ```
 
-## Node Namespaces and Remapping
-
-### Run a node with a custom name
-```bash
-ros2 run turtlesim turtlesim_node --ros-args --remap __node:=my_turtle
-```
-
-### Run a node in a namespace
-```bash
-ros2 run turtlesim turtlesim_node --ros-args -r __ns:=/my_namespace
-```
-
 ## Useful Commands
 
 ### Run a node with parameter settings
@@ -83,4 +71,4 @@ ros2 launch package_name launch_file.py
 4. View node information for different nodes
 
 ## Next Steps
-Move on to creating a [Python Package](../3_python_package/) for ROS2. 
+Move on to creating a [Python Package](../3_python_package/) for ROS2.

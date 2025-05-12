@@ -4,7 +4,7 @@ This tutorial explains how to create and work with ROS2 nodes in Python.
 
 ## Prerequisites
 - ROS2 installed (see [Installation Guide](../1_installation/))
-- Basic knowledge of Python and ROS2 packages (see [Python Package](../3_python_package/))
+- Basic knowledge of Python and ROS2 packages (see [Python Package Creation](../2_ros2_node_cli/))
 
 ## Understanding ROS2 Nodes
 
@@ -123,18 +123,18 @@ class AdvancedNode(Node):
     def __init__(self):
         super().__init__('advanced_node')
         self.get_logger().info('Xin chào! Advanced node started')
-        
+
         # Declare parameters
         self.declare_parameter('interval', 1.0)
         self.interval = self.get_parameter('interval').value
-        
+
         # Set up parameter callback
         self.add_on_set_parameters_callback(self.parameters_callback)
-        
+
         # Create a timer
         self.counter = 0
         self.timer = self.create_timer(self.interval, self.timer_callback)
-        
+
     def parameters_callback(self, params):
         for param in params:
             if param.name == 'interval':
@@ -143,7 +143,7 @@ class AdvancedNode(Node):
                 # Recreate the timer with the new interval
                 self.timer.timer_period_ns = int(self.interval * 1e9)
         return SetParametersResult(successful=True)
-        
+
     def timer_callback(self):
         self.counter += 1
         self.get_logger().info(f'Counter: {self.counter}, Interval: {self.interval}')
@@ -152,7 +152,7 @@ class AdvancedNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = AdvancedNode()
-    
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -194,4 +194,4 @@ ros2 node info /node_name
 ```
 
 ## Next Steps
-Move on to understanding [ROS2 Topics](../5_topic/) for node communication. 
+Move on to understanding [ROS2 Topics](../4_topic/) for node communication. 

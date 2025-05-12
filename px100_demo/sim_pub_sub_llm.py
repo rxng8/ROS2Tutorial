@@ -548,26 +548,26 @@ class LLMInterface:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         running = False
-                        
+
                     elif event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
                             running = False
-                            
+
                         elif event.key == pygame.K_RETURN and self.input_text:
                             # Send the command
                             command = self.input_text
                             self.input_text = ""
-                            
+
                             # Process in a separate thread to avoid blocking the UI
                             threading.Thread(
                                 target=self.process_and_execute_command,
                                 args=(command,),
                                 daemon=True
                             ).start()
-                            
+
                         elif event.key == pygame.K_BACKSPACE:
                             self.input_text = self.input_text[:-1]
-                            
+
                         else:
                             # Add character to input text
                             if event.unicode.isprintable():

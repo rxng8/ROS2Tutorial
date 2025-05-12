@@ -1,0 +1,1 @@
+exec ros2 launch display_robot.launch.py
