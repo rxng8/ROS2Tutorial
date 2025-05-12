@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import pathlib
 import rclpy
 from rclpy.node import Node
 import pygame
@@ -11,6 +12,7 @@ import os
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import String
+from dotenv import dotenv_values
 
 class PX100SimControl(Node):
     def __init__(self):
@@ -181,26 +183,40 @@ class ChatGPTControl:
         # System prompt to instruct ChatGPT about its role
         self.system_prompt = """
         You are a robot control assistant that translates natural language commands into precise robot joint controls.
-
+        
+        IMPORTANT: You MUST ONLY respond with a valid JSON object and NOTHING else. No explanations, no code blocks, no Markdown formatting.
+        
         Available joints and their ranges:
         - waist: -1.8 to 1.8 radians (rotation left/right)
         - shoulder: -1.4 to 1.8 radians (up/down)
         - elbow: -1.7 to 1.7 radians (bend/extend)
         - wrist_angle: -1.8 to 1.8 radians (rotation)
         - gripper: open or closed
-
-        When given a command, respond with a JSON object like:
-
-        For joint movements:
-        {"action": "move_joint", "joint": "joint_name", "delta": value_in_radians}
-
-        For gripper control:
-        {"action": "gripper", "state": "open"} or {"action": "gripper", "state": "closed"}
-
-        For home position:
-        {"action": "home"}
-
-        ONLY respond with this JSON format and nothing else. No explanations or other text.
+        
+        Instructions for specific commands:
+        
+        1. For joint movements:
+           For "move waist left" use:
+           {"action": "move_joint", "joint": "waist", "delta": -0.2}
+           For "move shoulder up" use:
+           {"action": "move_joint", "joint": "shoulder", "delta": 0.2}
+           
+           NOTE: Negative delta moves left/down, positive delta moves right/up
+           Use appropriate delta values between 0.1 and 0.3 radians
+        
+        2. For gripper control:
+           For "open gripper" use:
+           {"action": "gripper", "state": "open"}
+           For "close gripper" use:
+           {"action": "gripper", "state": "closed"}
+        
+        3. For home position:
+           For "go home" or "reset position" etc. use:
+           {"action": "home"}
+        
+        ALWAYS interpret the user's intent and map it to one of these three command structures.
+        NEVER include any text outside of the JSON object.
+        DO NOT include backticks (```) or any other formatting.
         """
 
         # Conversation history for context
@@ -218,15 +234,23 @@ class ChatGPTControl:
             self.conversation_history.append({"role": "user", "content": user_input})
 
             # Call ChatGPT API
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+            response = openai.chat.completions.create(
+                # model="gpt-3.5-turbo",
+                model="gpt-4o-mini",
                 messages=self.conversation_history,
                 temperature=0.2,  # Lower temperature for more deterministic responses
-                max_tokens=150
+                max_tokens=150,
+                response_format={"type": "json_object"}  # Force JSON response format
             )
 
             # Extract the response text
-            assistant_response = response.choices[0].message.content.strip()
+            completions = openai.chat.completions.list()
+            first_id = completions[0].id
+            first_completion: str = openai.chat.completions.retrieve(completion_id=first_id)
+            # print(first_completion)
+
+            assistant_response = first_completion.strip()
+            # assistant_response = response.choices[0].message.content.strip()
             self.conversation_history.append({"role": "assistant", "content": assistant_response})
 
             # Limit conversation history to last 10 exchanges to prevent token limits
@@ -248,7 +272,10 @@ class LLMInterface:
         self.ros_node = ros_node
 
         # Initialize ChatGPT controller
-        self.chatgpt = ChatGPTControl()
+        config = dotenv_values(pathlib.Path(__file__).parent.parent / ".env")
+        openai_api_key = config.get('OPENAI_API_KEY')
+        print(f"OpenAI API key: {openai_api_key}")
+        self.chatgpt = ChatGPTControl(api_key=openai_api_key)
 
         # Initialize pygame
         pygame.init()
@@ -387,20 +414,11 @@ class LLMInterface:
 
         # Parse response
         try:
-            # If it's a string (which it should be), convert to dict
-            if isinstance(response, str):
-                # Clean the response to extract just the JSON part
-                import json
-                import re
+            # Parse the response as JSON directly since we're using response_format=json_object
+            import json
 
-                # Try to find a JSON object in the response
-                json_match = re.search(r'\{.*\}', response, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(0)
-                    response_data = json.loads(json_str)
-                else:
-                    # If no JSON found, try to parse the whole response
-                    response_data = json.loads(response)
+            if isinstance(response, str):
+                response_data = json.loads(response)
             else:
                 response_data = response
 
@@ -415,6 +433,7 @@ class LLMInterface:
 
         except Exception as e:
             print(f"Error processing ChatGPT response: {e}")
+            print(f"Raw response: {response}")
             self.responses.insert(0, f"Error: {str(e)}")
 
     def execute_robot_command(self, command_data):

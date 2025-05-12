@@ -1,12 +1,13 @@
 # %%
 
 # export OPENAI_API_KEY="your_api_key_here"
+import sys, pathlib
 import os
 from dotenv import load_dotenv, dotenv_values
 
 # Load environment variables from .env file
 # load_dotenv()
-config = dotenv_values(".env")
+config = dotenv_values(pathlib.Path(__file__).parent.parent / ".env")
 openai_api_key = config.get('OPENAI_API_KEY')
 
 # %%
