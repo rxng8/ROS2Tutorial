@@ -177,43 +177,60 @@ class ChatGPTControl:
 
         # Set up OpenAI client
         if self.api_key:
-            openai.api_key = self.api_key
+            self.client = openai.OpenAI(api_key=self.api_key)
             print("ChatGPT API initialized successfully.")
 
         # System prompt to instruct ChatGPT about its role
         self.system_prompt = """
         You are a robot control assistant that translates natural language commands into precise robot joint controls.
-        
+
         IMPORTANT: You MUST ONLY respond with a valid JSON object and NOTHING else. No explanations, no code blocks, no Markdown formatting.
-        
+
         Available joints and their ranges:
         - waist: -1.8 to 1.8 radians (rotation left/right)
         - shoulder: -1.4 to 1.8 radians (up/down)
         - elbow: -1.7 to 1.7 radians (bend/extend)
         - wrist_angle: -1.8 to 1.8 radians (rotation)
         - gripper: open or closed
-        
+
         Instructions for specific commands:
-        
+
         1. For joint movements:
-           For "move waist left" use:
+           For "move waist left" or similar text, use:
            {"action": "move_joint", "joint": "waist", "delta": -0.2}
-           For "move shoulder up" use:
+           For "move waist right" or similar text, use:
+           {"action": "move_joint", "joint": "waist", "delta": 0.2}
+
+           For "move shoulder up" or similar text, use:
+           {"action": "move_joint", "joint": "shoulder", "delta": -0.2}
+           For "move shoulder down" or similar text, use:
            {"action": "move_joint", "joint": "shoulder", "delta": 0.2}
-           
-           NOTE: Negative delta moves left/down, positive delta moves right/up
+
+           For "move elbow up" or similar text, use:
+           {"action": "move_joint", "joint": "elbow", "delta": -0.2}
+           For "move elbow down" or similar text, use:
+           {"action": "move_joint", "joint": "elbow", "delta": 0.2}
+
+           For "move wrist up" or similar text, use:
+           {"action": "move_joint", "joint": "wrist_angle", "delta": -0.2}
+           For "move wrist down" or similar text, use:
+           {"action": "move_joint", "joint": "wrist_angle", "delta": 0.2}
+
+           NOTE: Direction conventions:
+           - For waist: negative delta (-) moves left, positive delta (+) moves right
+           - For shoulder, elbow, wrist: negative delta (-) moves up, positive delta (+) moves down
            Use appropriate delta values between 0.1 and 0.3 radians
-        
+
         2. For gripper control:
-           For "open gripper" use:
+           For "open gripper" or similar text, use:
            {"action": "gripper", "state": "open"}
-           For "close gripper" use:
+           For "close gripper" or similar text, use:
            {"action": "gripper", "state": "closed"}
-        
+
         3. For home position:
-           For "go home" or "reset position" etc. use:
+           For "go home", "reset position" or similar text, use:
            {"action": "home"}
-        
+
         ALWAYS interpret the user's intent and map it to one of these three command structures.
         NEVER include any text outside of the JSON object.
         DO NOT include backticks (```) or any other formatting.
@@ -234,23 +251,23 @@ class ChatGPTControl:
             self.conversation_history.append({"role": "user", "content": user_input})
 
             # Call ChatGPT API
-            response = openai.chat.completions.create(
+            response = self.client.chat.completions.create(
                 # model="gpt-3.5-turbo",
                 model="gpt-4o-mini",
                 messages=self.conversation_history,
                 temperature=0.2,  # Lower temperature for more deterministic responses
                 max_tokens=150,
-                response_format={"type": "json_object"}  # Force JSON response format
+                response_format={"type": "json_object"},  # Force JSON response format
             )
 
             # Extract the response text
-            completions = openai.chat.completions.list()
-            first_id = completions[0].id
-            first_completion: str = openai.chat.completions.retrieve(completion_id=first_id)
+            # completions = self.client.chat.completions.list()
+            # first_id = completions[0].id
+            # first_completion: str = self.client.chat.completions.retrieve(completion_id=first_id)
             # print(first_completion)
 
-            assistant_response = first_completion.strip()
-            # assistant_response = response.choices[0].message.content.strip()
+            # assistant_response = first_completion.strip()
+            assistant_response = response.choices[0].message.content.strip()
             self.conversation_history.append({"role": "assistant", "content": assistant_response})
 
             # Limit conversation history to last 10 exchanges to prevent token limits
@@ -319,8 +336,31 @@ class LLMInterface:
         # Current state
         self.gripper_state = "open"
 
+        # Maximum text width for command history (pixels)
+        self.max_text_width = self.width - 150  # Allow some margin
+
         print("Natural language robot control initialized. Type your commands in the input box.")
         print("Example commands: 'move left', 'close the gripper', 'move elbow up', 'go to home position'")
+
+    def truncate_text(self, text, font, max_width):
+        """Truncate text to fit within max_width pixels, adding '...' if needed"""
+        if font.size(text)[0] <= max_width:
+            return text
+
+        ellipsis = "..."
+        ellipsis_width = font.size(ellipsis)[0]
+        available_width = max_width - ellipsis_width
+
+        # Binary search for the right truncation point
+        left, right = 0, len(text)
+        while left < right:
+            mid = (left + right) // 2
+            if font.size(text[:mid])[0] <= available_width:
+                left = mid + 1
+            else:
+                right = mid
+
+        return text[:left-1] + ellipsis
 
     def render_ui(self):
         """Render the UI elements on the screen"""
@@ -335,15 +375,15 @@ class LLMInterface:
         joint_states = self.ros_node.get_all_joint_positions()
 
         # Draw joint positions
+        y_pos = 80
+
+        # Add header
+        header = self.font_medium.render("Joint Positions:", True, self.colors['info'])
+        self.screen.blit(header, (50, y_pos))
+        y_pos += 40
+
+        # Display each joint position
         if joint_states:
-            y_pos = 80
-
-            # Add header
-            header = self.font_medium.render("Joint Positions:", True, self.colors['info'])
-            self.screen.blit(header, (50, y_pos))
-            y_pos += 40
-
-            # Display each joint position
             for joint_name in ['waist', 'shoulder', 'elbow', 'wrist_angle']:
                 if joint_name in joint_states:
                     joint_text = f"{joint_name}: {joint_states[joint_name]:.3f}"
@@ -355,44 +395,58 @@ class LLMInterface:
             gripper_text = f"Gripper: {self.gripper_state}"
             gripper_render = self.font_small.render(gripper_text, True, self.colors['info'])
             self.screen.blit(gripper_render, (80, y_pos))
-            y_pos += 50
+        else:
+            text = self.font_small.render("Waiting for joint states...", True, self.colors['warning'])
+            self.screen.blit(text, (80, y_pos))
+            
+        # Fixed position for command history to prevent variable layout
+        y_pos = 230  # Fixed starting position for command history
 
-            # Command history header
-            history_header = self.font_medium.render("Command History:", True, self.colors['highlight'])
-            self.screen.blit(history_header, (50, y_pos))
-            y_pos += 40
+        # Command history header
+        history_header = self.font_medium.render("Command History:", True, self.colors['highlight'])
+        self.screen.blit(history_header, (50, y_pos))
+        y_pos += 35
 
-            # Display command history
+        # Display command history
+        if self.command_history:
             for i, (cmd, resp) in enumerate(zip(self.command_history, self.responses)):
                 if i >= self.max_history:
                     break
 
-                # User command
+                # User command - truncate if too long
+                truncated_cmd = self.truncate_text(f"You: {cmd}", self.font_small, self.max_text_width)
                 cmd_bg = pygame.Rect(60, y_pos, self.width - 120, 25)
                 pygame.draw.rect(self.screen, self.colors['command_bg'], cmd_bg)
-                cmd_text = self.font_small.render(f"You: {cmd}", True, self.colors['text'])
+                cmd_text = self.font_small.render(truncated_cmd, True, self.colors['text'])
                 self.screen.blit(cmd_text, (70, y_pos))
-                y_pos += 30
+                y_pos += 28
 
-                # Response
+                # Response - truncate if too long
+                truncated_resp = self.truncate_text(f"Robot: {resp}", self.font_small, self.max_text_width)
                 resp_bg = pygame.Rect(60, y_pos, self.width - 120, 25)
                 pygame.draw.rect(self.screen, self.colors['response_bg'], resp_bg)
-                resp_text = self.font_small.render(f"Robot: {resp}", True, self.colors['info'])
+                resp_text = self.font_small.render(truncated_resp, True, self.colors['info'])
                 self.screen.blit(resp_text, (70, y_pos))
-                y_pos += 40
+                y_pos += 32
+        else:
+            text = self.font_small.render("No commands yet. Type a command below.", True, self.colors['text'])
+            self.screen.blit(text, (70, y_pos))
 
-        # Input box
+        # Input box - fixed position
         pygame.draw.rect(self.screen, self.colors['input_bg'], self.input_rect)
-
+        
         # Input text with cursor blink
-        input_surface = self.font_medium.render(self.input_text, True, self.colors['input_text'])
-        self.screen.blit(input_surface, (self.input_rect.x + 10, self.input_rect.y + 5))
-
+        if len(self.input_text) > 0:
+            # Truncate input text if too long for display
+            display_text = self.truncate_text(self.input_text, self.font_medium, self.input_rect.width - 20)
+            input_surface = self.font_medium.render(display_text, True, self.colors['input_text'])
+            self.screen.blit(input_surface, (self.input_rect.x + 10, self.input_rect.y + 5))
+        
         # Input prompt
         prompt_text = self.font_small.render("Enter command:", True, self.colors['highlight'])
         self.screen.blit(prompt_text, (50, 420))
 
-        # Instructions
+        # Instructions - fixed position
         instructions = [
             "Press ENTER to send command",
             "ESC to quit"
